@@ -6,13 +6,15 @@
 // System prompt for the LLM to enforce strict JSON output
 const SYSTEM_PROMPT = `
 You are a nutrition assistant. Your task is to extract food items and their quantities from a natural language description.
+The input may be in any language (e.g., Vietnamese, Spanish, etc.), but your output must ALWAYS be in English.
+Translate all food names and units into English.
 Output STRICT JSON only. No markdown formatting, no explanations.
 The output format must be an array of objects:
 [
-  { "item_name": "string", "quantity": "string containing number and unit" }
+  { "item_name": "string in English", "quantity": "string containing number and English unit" }
 ]
-Example input: "I ate a large banana and a cup of coffee"
-Example output: [{"item_name": "large banana", "quantity": "1"}, {"item_name": "coffee", "quantity": "1 cup"}]
+Example input: "Tôi đã ăn 2 quả trứng gà và 1 bát cơm"
+Example output: [{"item_name": "chicken egg", "quantity": "2"}, {"item_name": "cooked rice", "quantity": "1 bowl"}]
 If the quantity is not specified, estimate a standard serving size or use "1 serving".
 `;
 
@@ -75,13 +77,23 @@ export async function parseMeal(description, apiKey) {
  * To avoid multiple API calls, we will join the queries into a single string.
  * CalorieNinjas supports natural language queries with multiple items (e.g., "1 apple and 2 eggs").
  */
-export async function fetchNutrition(items, apiKey) {
-  if (!apiKey) throw new Error("Nutrition API Key is required.");
+export async function fetchNutrition(items, config) {
+  const { provider, apiKey, appId, appKey } = config;
 
+  if (provider === "calorieninjas") {
+    if (!apiKey) throw new Error("CalorieNinjas API Key is required.");
+    return fetchFromCalorieNinjas(items, apiKey);
+  } else if (provider === "nutritionix") {
+    if (!appId || !appKey)
+      throw new Error("Nutritionix App ID and App Key are required.");
+    return fetchFromNutritionix(items, appId, appKey);
+  } else {
+    throw new Error("Invalid nutrition provider selected.");
+  }
+}
+
+async function fetchFromCalorieNinjas(items, apiKey) {
   const endpoint = "https://api.calorieninjas.com/v1/nutrition";
-
-  // Construct a single query string from all items.
-  // Example: "1 apple, 2 eggs, 1 slice toast"
   const query = items
     .map((item) => `${item.quantity || ""} ${item.item_name}`)
     .join(", ");
@@ -92,12 +104,7 @@ export async function fetchNutrition(items, apiKey) {
       headers: { "X-Api-Key": apiKey },
     });
 
-    const apiItems = response.data.items || [];
-
-    // Map the API results back to our requested structure.
-    // Note: The API might return a slightly different name or splitting.
-    // We will return exactly what the API returns as "found items".
-    return apiItems.map((result) => ({
+    return (response.data.items || []).map((result) => ({
       name: result.name,
       found: true,
       calories: result.calories,
@@ -112,9 +119,51 @@ export async function fetchNutrition(items, apiKey) {
       serving_size_g: result.serving_size_g,
     }));
   } catch (error) {
-    console.error("Nutrition API Error:", error);
+    console.error("CalorieNinjas API Error:", error);
+    throw new Error("Failed to fetch data from CalorieNinjas.");
+  }
+}
+
+async function fetchFromNutritionix(items, appId, appKey) {
+  const endpoint = "https://trackapi.nutritionix.com/v2/natural/nutrients";
+  const query = items
+    .map((item) => `${item.quantity || ""} ${item.item_name}`)
+    .join(", ");
+
+  try {
+    const response = await axios.post(
+      endpoint,
+      { query: query },
+      {
+        headers: {
+          "x-app-id": appId,
+          "x-app-key": appKey,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+
+    return (response.data.foods || []).map((food) => ({
+      name: food.food_name,
+      found: true,
+      calories: food.nf_calories,
+      protein_g: food.nf_protein,
+      fat_total_g: food.nf_total_fat,
+      carbohydrates_total_g: food.nf_total_carbohydrate,
+      sugar_g: food.nf_sugars,
+      fiber_g: food.nf_dietary_fiber,
+      sodium_mg: food.nf_sodium,
+      potassium_mg: food.nf_potassium,
+      cholesterol_mg: food.nf_cholesterol,
+      serving_size_g: food.serving_weight_grams,
+    }));
+  } catch (error) {
+    console.error("Nutritionix API Error:", error);
+    if (error.response && error.response.status === 404) {
+      return []; // No foods found
+    }
     throw new Error(
-      "Failed to fetch nutrition data. Please check your API key and try again.",
+      "Failed to fetch data from Nutritionix. Please check your credentials.",
     );
   }
 }

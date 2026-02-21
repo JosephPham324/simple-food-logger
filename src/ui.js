@@ -23,15 +23,51 @@ function ConfigPanel({ state, dispatch }) {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Nutrition API Key (CalorieNinjas)</label>
-          <input
-            type="password"
-            value={state.nutritionApiKey}
-            onChange={(e) => handleChange("nutritionApiKey", e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
-            placeholder="Key..."
-          />
+          <label className="block text-sm font-medium text-gray-700 mb-1">Nutrition API Provider</label>
+          <select
+            value={state.nutritionProvider}
+            onChange={(e) => handleChange("nutritionProvider", e.target.value)}
+            className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition bg-white"
+          >
+            <option value="calorieninjas">CalorieNinjas</option>
+            <option value="nutritionix">Nutritionix</option>
+          </select>
         </div>
+        {state.nutritionProvider === "calorieninjas" ? (
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">CalorieNinjas API Key</label>
+            <input
+              type="password"
+              value={state.nutritionApiKey}
+              onChange={(e) => handleChange("nutritionApiKey", e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+              placeholder="Key..."
+            />
+          </div>
+        ) : (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nutritionix App ID</label>
+              <input
+                type="text"
+                value={state.nutritionixAppId}
+                onChange={(e) => handleChange("nutritionixAppId", e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+                placeholder="App ID..."
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nutritionix App Key</label>
+              <input
+                type="password"
+                value={state.nutritionixAppKey}
+                onChange={(e) => handleChange("nutritionixAppKey", e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+                placeholder="App Key..."
+              />
+            </div>
+          </>
+        )}
       </div>
       <div className="mt-4 flex items-center">
         <input
@@ -51,12 +87,24 @@ function ConfigPanel({ state, dispatch }) {
 
 function UserInput({ state, dispatch }) {
   const handleAnalyze = async () => {
-    if (!state.llmApiKey || !state.nutritionApiKey) {
-      dispatch({ type: ACTIONS.SET_ERROR, value: "Please provide both API keys in the configuration panel." });
+    const hasLlmKey = !!state.llmApiKey;
+    const hasNutritionKeys =
+      state.nutritionProvider === "calorieninjas"
+        ? !!state.nutritionApiKey
+        : !!state.nutritionixAppId && !!state.nutritionixAppKey;
+
+    if (!hasLlmKey || !hasNutritionKeys) {
+      dispatch({
+        type: ACTIONS.SET_ERROR,
+        value: "Please provide both API keys in the configuration panel.",
+      });
       return;
     }
     if (!state.inputDescription.trim()) {
-      dispatch({ type: ACTIONS.SET_ERROR, value: "Please enter a meal description." });
+      dispatch({
+        type: ACTIONS.SET_ERROR,
+        value: "Please enter a meal description.",
+      });
       return;
     }
 
@@ -103,7 +151,16 @@ function VerificationPanel({ state, dispatch }) {
     dispatch({ type: ACTIONS.START_LOADING });
     try {
       // 3. Nutritional Querying (Batched)
-      const nutritionResults = await fetchNutrition(state.parsedItems, state.nutritionApiKey);
+      const nutritionConfig = {
+        provider: state.nutritionProvider,
+        apiKey: state.nutritionApiKey,
+        appId: state.nutritionixAppId,
+        appKey: state.nutritionixAppKey,
+      };
+      const nutritionResults = await fetchNutrition(
+        state.parsedItems,
+        nutritionConfig,
+      );
       dispatch({ type: ACTIONS.SET_RESULTS, items: nutritionResults });
     } catch (error) {
       dispatch({ type: ACTIONS.SET_ERROR, value: error.message });
@@ -208,17 +265,18 @@ function OutputDisplay({ state, dispatch }) {
 
         <div className="min-w-full">
           {/* Header - Hidden on small screens, visible on md+ */}
-          <div className="hidden md:grid md:grid-cols-12 gap-4 text-sm font-bold text-gray-500 uppercase pb-2 border-b">
+            <div className="hidden md:grid md:grid-cols-12 gap-4 text-sm font-bold text-gray-500 uppercase pb-2 border-b">
             <div className="col-span-4">Item</div>
             <div className="col-span-2 text-center">Calories</div>
-            <div className="col-span-2 text-center">Protein</div>
-            <div className="col-span-2 text-center">Fat</div>
+            <div className="col-span-1 text-center">Protein</div>
+            <div className="col-span-1 text-center">Fat</div>
             <div className="col-span-2 text-center">Carbs</div>
+            <div className="col-span-2 text-center">Action</div>
           </div>
 
           <div className="space-y-4 md:space-y-0 text-sm">
             {state.foodItems.map((item, index) => (
-              <div key={index} className="flex flex-col md:grid md:grid-cols-12 md:gap-4 py-3 border-b last:border-0 hover:bg-gray-50 transition">
+              <div key={index} className="flex flex-col md:grid md:grid-cols-12 md:gap-4 py-3 border-b last:border-0 hover:bg-gray-50 transition relative group">
                 {/* Name */}
                 <div className="col-span-4 font-semibold text-gray-800 flex items-center mb-2 md:mb-0">
                   <span className="capitalize">{item.name}</span>
@@ -232,11 +290,11 @@ function OutputDisplay({ state, dispatch }) {
                       <span className="md:hidden text-gray-500">Calories:</span>
                       <span className="font-bold text-gray-800">{item.calories}</span>
                     </div>
-                    <div className="col-span-2 text-center flex justify-between md:justify-center">
+                    <div className="col-span-1 text-center flex justify-between md:justify-center">
                       <span className="md:hidden text-gray-500">Protein:</span>
                       <span className="font-bold text-gray-800">{item.protein_g}g</span>
                     </div>
-                    <div className="col-span-2 text-center flex justify-between md:justify-center">
+                    <div className="col-span-1 text-center flex justify-between md:justify-center">
                       <span className="md:hidden text-gray-500">Fat:</span>
                       <span className="font-bold text-gray-800">{item.fat_total_g}g</span>
                     </div>
@@ -246,8 +304,22 @@ function OutputDisplay({ state, dispatch }) {
                     </div>
                   </>
                 ) : (
-                  <div className="col-span-8 text-gray-400 italic text-sm">No data available</div>
+                  <div className="col-span-6 text-gray-400 italic text-sm">No data available</div>
                 )}
+
+                {/* Remove Button */}
+                <div className="col-span-2 flex justify-end md:justify-center mt-2 md:mt-0">
+                  <button
+                    onClick={() => dispatch({ type: ACTIONS.REMOVE_FOOD_ITEM, index })}
+                    className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors flex items-center text-xs font-bold"
+                    title="Remove item"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    REMOVE
+                  </button>
+                </div>
 
                 {/* Micros Row (Full width) */}
                 {state.showMicros && item.found && (

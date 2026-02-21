@@ -6,6 +6,9 @@
 export const initialState = {
   llmApiKey: "",
   nutritionApiKey: "",
+  nutritionProvider: "calorieninjas", // 'calorieninjas' or 'nutritionix'
+  nutritionixAppId: "",
+  nutritionixAppKey: "",
   showMicros: false,
 
   inputDescription: "",
@@ -35,6 +38,7 @@ export const ACTIONS = {
   CLEAR_RESULTS: "CLEAR_RESULTS", // Resets to INPUT
   BACK_TO_INPUT: "BACK_TO_INPUT", // Keeps input text but goes back
   TOGGLE_MICROS: "TOGGLE_MICROS",
+  REMOVE_FOOD_ITEM: "REMOVE_FOOD_ITEM",
 };
 
 export function reducer(state, action) {
@@ -98,6 +102,13 @@ export function reducer(state, action) {
       return {
         ...state,
         showMicros: action.value,
+      };
+    case ACTIONS.REMOVE_FOOD_ITEM:
+      const updatedFoodItems = state.foodItems.filter((_, idx) => idx !== action.index);
+      return {
+        ...state,
+        foodItems: updatedFoodItems,
+        totals: calculateTotals(updatedFoodItems),
       };
     default:
       return state;
