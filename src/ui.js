@@ -203,6 +203,26 @@ function VerificationPanel({ state, dispatch }) {
 }
 
 function OutputDisplay({ state, dispatch }) {
+  const [copyStatus, setCopyStatus] = useState("Copy for Sheets");
+
+  const handleCopy = () => {
+    const headers = ["Item", "Calories", "Protein (g)", "Fat (g)", "Carbs (g)"];
+    const rows = state.foodItems.map((item) => [
+      item.name,
+      item.calories || 0,
+      item.protein_g || 0,
+      item.fat_total_g || 0,
+      item.carbohydrates_total_g || 0,
+    ]);
+
+    const tsvContent = [headers, ...rows].map((row) => row.join("\t")).join("\n");
+
+    navigator.clipboard.writeText(tsvContent).then(() => {
+      setCopyStatus("Copied!");
+      setTimeout(() => setCopyStatus("Copy for Sheets"), 2000);
+    });
+  };
+
   if (state.isLoading) {
     return (
       <div className="flex justify-center items-center p-12">
@@ -234,9 +254,20 @@ function OutputDisplay({ state, dispatch }) {
       <div className="bg-white p-6 rounded-lg shadow-md border-t-4 border-secondary">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-gray-800">Total Nutrition</h2>
-          <button onClick={() => dispatch({ type: ACTIONS.CLEAR_RESULTS })} className="text-sm text-blue-500 hover:underline">
-            Start Over
-          </button>
+          <div className="flex space-x-4 items-center">
+            <button
+              onClick={handleCopy}
+              className="text-sm bg-blue-50 text-blue-600 px-3 py-1 rounded hover:bg-blue-100 transition font-medium flex items-center"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+              </svg>
+              {copyStatus}
+            </button>
+            <button onClick={() => dispatch({ type: ACTIONS.CLEAR_RESULTS })} className="text-sm text-blue-500 hover:underline">
+              Start Over
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 text-center">
@@ -259,92 +290,72 @@ function OutputDisplay({ state, dispatch }) {
         </div>
       </div>
 
-      {/* Individual Items - Responsive Grid Table */}
-      <div className="bg-white p-6 rounded-lg shadow-md overflow-hidden">
+      {/* Individual Items - Semantic Table */}
+      <div className="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
         <h3 className="text-lg font-bold mb-4 text-gray-800 border-b pb-2">Item Breakdown</h3>
 
-        <div className="min-w-full">
-          {/* Header - Hidden on small screens, visible on md+ */}
-            <div className="hidden md:grid md:grid-cols-12 gap-4 text-sm font-bold text-gray-500 uppercase pb-2 border-b">
-            <div className="col-span-4">Item</div>
-            <div className="col-span-2 text-center">Calories</div>
-            <div className="col-span-1 text-center">Protein</div>
-            <div className="col-span-1 text-center">Fat</div>
-            <div className="col-span-2 text-center">Carbs</div>
-            <div className="col-span-2 text-center">Action</div>
-          </div>
-
-          <div className="space-y-4 md:space-y-0 text-sm">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th scope="col" className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Item</th>
+              <th scope="col" className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Calories</th>
+              <th scope="col" className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Protein</th>
+              <th scope="col" className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Fat</th>
+              <th scope="col" className="px-4 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Carbs</th>
+              <th scope="col" className="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Action</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200 text-sm">
             {state.foodItems.map((item, index) => (
-              <div key={index} className="flex flex-col md:grid md:grid-cols-12 md:gap-4 py-3 border-b last:border-0 hover:bg-gray-50 transition relative group">
-                {/* Name */}
-                <div className="col-span-4 font-semibold text-gray-800 flex items-center mb-2 md:mb-0">
-                  <span className="capitalize">{item.name}</span>
-                  {!item.found && <span className="ml-2 text-xs text-red-500 font-medium bg-red-50 px-2 py-0.5 rounded">(Not found)</span>}
-                </div>
-
-                {item.found ? (
-                  <>
-                    {/* Mobile Labels included for stacking, hidden on desktop */}
-                    <div className="col-span-2 text-center flex justify-between md:justify-center">
-                      <span className="md:hidden text-gray-500">Calories:</span>
-                      <span className="font-bold text-gray-800">{item.calories}</span>
+              <React.Fragment key={index}>
+                <tr className="hover:bg-gray-50 transition">
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <span className="capitalize font-semibold text-gray-800">{item.name}</span>
+                      {!item.found && <span className="ml-2 text-[10px] text-red-500 font-medium bg-red-50 px-1.5 py-0.5 rounded">Not found</span>}
                     </div>
-                    <div className="col-span-1 text-center flex justify-between md:justify-center">
-                      <span className="md:hidden text-gray-500">Protein:</span>
-                      <span className="font-bold text-gray-800">{item.protein_g}g</span>
-                    </div>
-                    <div className="col-span-1 text-center flex justify-between md:justify-center">
-                      <span className="md:hidden text-gray-500">Fat:</span>
-                      <span className="font-bold text-gray-800">{item.fat_total_g}g</span>
-                    </div>
-                    <div className="col-span-2 text-center flex justify-between md:justify-center">
-                      <span className="md:hidden text-gray-500">Carbs:</span>
-                      <span className="font-bold text-gray-800">{item.carbohydrates_total_g}g</span>
-                    </div>
-                  </>
-                ) : (
-                  <div className="col-span-6 text-gray-400 italic text-sm">No data available</div>
-                )}
-
-                {/* Remove Button */}
-                <div className="col-span-2 flex justify-end md:justify-center mt-2 md:mt-0">
-                  <button
-                    onClick={() => dispatch({ type: ACTIONS.REMOVE_FOOD_ITEM, index })}
-                    className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors flex items-center text-xs font-bold"
-                    title="Remove item"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                    REMOVE
-                  </button>
-                </div>
-
-                {/* Micros Row (Full width) */}
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap text-center font-bold text-gray-800">
+                    {item.found ? item.calories : "-"}
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap text-center font-bold text-gray-800">
+                    {item.found ? `${item.protein_g}g` : "-"}
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap text-center font-bold text-gray-800">
+                    {item.found ? `${item.fat_total_g}g` : "-"}
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap text-center font-bold text-gray-800">
+                    {item.found ? `${item.carbohydrates_total_g}g` : "-"}
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <button
+                      onClick={() => dispatch({ type: ACTIONS.REMOVE_FOOD_ITEM, index })}
+                      className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors"
+                      title="Remove item"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
                 {state.showMicros && item.found && (
-                  <div className="col-span-12 mt-2 pt-2 border-t border-gray-100 text-xs text-gray-500 grid grid-cols-2 md:grid-cols-5 gap-2">
-                    <div>
-                      <span className="font-medium">Sugar:</span> {item.sugar_g}g
-                    </div>
-                    <div>
-                      <span className="font-medium">Fiber:</span> {item.fiber_g}g
-                    </div>
-                    <div>
-                      <span className="font-medium">Sodium:</span> {item.sodium_mg}mg
-                    </div>
-                    <div>
-                      <span className="font-medium">Potassium:</span> {item.potassium_mg}mg
-                    </div>
-                    <div>
-                      <span className="font-medium">Cholesterol:</span> {item.cholesterol_mg}mg
-                    </div>
-                  </div>
+                  <tr className="bg-gray-50/50">
+                    <td colSpan="6" className="px-4 py-2">
+                      <div className="flex flex-wrap gap-x-6 gap-y-1 text-[10px] text-gray-500 uppercase tracking-tight">
+                        <span><span className="font-bold">Sugar:</span> {item.sugar_g}g</span>
+                        <span><span className="font-bold">Fiber:</span> {item.fiber_g}g</span>
+                        <span><span className="font-bold">Sodium:</span> {item.sodium_mg}mg</span>
+                        <span><span className="font-bold">Potassium:</span> {item.potassium_mg}mg</span>
+                        <span><span className="font-bold">Cholesterol:</span> {item.cholesterol_mg}mg</span>
+                      </div>
+                    </td>
+                  </tr>
                 )}
-              </div>
+              </React.Fragment>
             ))}
-          </div>
-        </div>
+          </tbody>
+        </table>
       </div>
     </div>
   );
